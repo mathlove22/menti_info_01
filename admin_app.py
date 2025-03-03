@@ -9,7 +9,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import re
-import matplotlib.font_manager as fm
+import matplotlib as mpl
+import os
 
 # 페이지 설정
 st.set_page_config(
@@ -18,9 +19,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# 한글 폰트 설정
-plt.rcParams['font.family'] = 'NanumGothic'  # 또는 'Malgun Gothic'
+# 한글 폰트 설정 (Streamlit Cloud에서 사용 가능한 폰트)
 plt.rcParams['axes.unicode_minus'] = False
+# DejaVu Sans는 기본적으로 설치되어 있어 한글 표시 가능
+plt.rcParams['font.family'] = 'DejaVu Sans'
 
 # 커스텀 CSS
 st.markdown(
@@ -42,15 +44,13 @@ st.markdown(
         border-radius: 10px;
         text-align: center;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        cursor: pointer;
+        margin-bottom: 20px;
     }
     .qr-large {
-        max-width: 350px;
-        margin: 0 auto;
+        width: 300px;
     }
     .qr-small {
-        max-width: 200px;
-        margin: 0 auto;
+        width: 200px;
     }
     .dashboard-card {
         background-color: #ffffff;
@@ -59,35 +59,10 @@ st.markdown(
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    .stats-container {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 20px;
-    }
-    .stat-item {
-        background-color: #f1f8ff;
-        padding: 10px 15px;
-        border-radius: 8px;
-        text-align: center;
-        flex: 1;
-        margin: 0 5px;
-    }
-    .stat-item h3 {
-        font-size: 1em;
-        margin: 0;
-    }
-    .stat-item h2 {
-        font-size: 1.5em;
-        margin: 5px 0 0 0;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
-# QR 코드 토글 상태 초기화
-if "qr_expanded" not in st.session_state:
-    st.session_state.qr_expanded = False
 
 # 구글 시트 연결 설정
 @st.cache_resource
@@ -260,6 +235,7 @@ def create_chart(data, question_type):
         return None
     
     try:
+        # 한글 지원을 위한 폰트 설정
         plt.figure(figsize=(10, 6))
         
         if question_type.lower() == "객관식":
@@ -268,38 +244,51 @@ def create_chart(data, question_type):
             labels = list(counter.keys())
             values = list(counter.values())
             
-            bars = plt.bar(range(len(labels)), values, color='#5DA5DA')
+            # 영문 레이블로 먼저 그래프 생성
+            temp_labels = [f"Option {i+1}" for i in range(len(labels))]
+            bars = plt.bar(temp_labels, values, color='#5DA5DA')
             
             # 각 막대 위에 값 표시
-            for i, bar in enumerate(bars):
+            for bar in bars:
                 height = bar.get_height()
                 plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
                         f'{height}', ha='center', va='bottom')
             
-            plt.ylabel('응답 수')
-            plt.title('객관식 응답 결과')
-            plt.xticks(range(len(labels)), labels, rotation=45, ha='right')
+            plt.ylabel('Number of Responses')
+            plt.title('Multiple Choice Results')
+            plt.xticks(rotation=45, ha='right')
+            
+            # 실제 레이블 표시
+            for i, (bar, label) in enumerate(zip(bars, labels)):
+                plt.text(bar.get_x() + bar.get_width()/2., -0.5, 
+                       label, ha='center', va='top', rotation=45)
+            
             plt.tight_layout()
             
         elif question_type.lower() == "단답형":
             # 단답형 응답 분석 및 시각화
             labels, values = analyze_text_responses(data)
             if labels and values:
-                # 수평 막대 그래프로 표시 (빈도 높은 순)
-                bars = plt.barh(range(len(labels)), values, color='#5DA5DA')
+                # 영문 레이블로 먼저 그래프 생성
+                temp_labels = [f"Word {i+1}" for i in range(len(labels))]
+                bars = plt.barh(temp_labels, values, color='#5DA5DA')
                 
                 # 각 막대 옆에 값 표시
-                for i, bar in enumerate(bars):
+                for bar in bars:
                     width = bar.get_width()
                     plt.text(width + 0.1, bar.get_y() + bar.get_height()/2.,
                             f'{width}', ha='left', va='center')
                 
-                plt.xlabel('빈도')
-                plt.title('단답형 응답 분석 결과')
-                plt.yticks(range(len(labels)), labels)
+                # 실제 레이블 표시
+                for i, (bar, label) in enumerate(zip(bars, labels)):
+                    plt.text(0, bar.get_y() + bar.get_height()/2., 
+                           label, ha='right', va='center')
+                
+                plt.xlabel('Frequency')
+                plt.title('Text Response Analysis')
                 plt.tight_layout()
             else:
-                plt.text(0.5, 0.5, '분석할 데이터가 충분하지 않습니다', 
+                plt.text(0.5, 0.5, 'Not enough data to analyze', 
                        ha='center', va='center', fontsize=12)
                 plt.axis('off')
         
@@ -362,10 +351,6 @@ def initialize_sheets(sheet_id):
         st.error(f"시트 초기화 중 오류 발생: {str(e)}")
         return False
 
-# QR 코드 토글 함수
-def toggle_qr_size():
-    st.session_state.qr_expanded = not st.session_state.qr_expanded
-
 # 메인 앱
 def main():
     st.markdown('<div class="title">실시간 투표 관리자 대시보드</div>', unsafe_allow_html=True)
@@ -377,24 +362,30 @@ def main():
     # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
     vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
+    # QR 코드 크기 상태 관리
+    if "qr_large" not in st.session_state:
+        st.session_state.qr_large = False
+    
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
         st.markdown("### 투표 참여 QR 코드")
         qr_img = generate_qr_code(vote_app_url)
         if qr_img:
-            # QR 코드 클릭 시 크기 토글
-            qr_class = "qr-large" if st.session_state.qr_expanded else "qr-small"
+            # QR 코드 크기에 따라 클래스 설정
+            qr_class = "qr-large" if st.session_state.qr_large else "qr-small"
+            
+            # QR 코드 표시
             st.markdown(
-                f'<div class="qr-container" onclick="this.classList.toggle(\'qr-large\');">'
+                f'<div class="qr-container">'
                 f'<img src="data:image/png;base64,{qr_img}" class="{qr_class}">'
-                f'<p>QR 코드를 스캔하여 참여하세요<br>(클릭하여 크기 변경)</p>'
+                f'<p>QR 코드를 스캔하여 참여하세요</p>'
                 f'</div>',
                 unsafe_allow_html=True
             )
             
             # QR 코드 크기 토글 버튼
-            if st.button("QR 코드 크기 변경", key="qr_toggle"):
-                toggle_qr_size()
+            if st.button("QR 코드 크기 변경"):
+                st.session_state.qr_large = not st.session_state.qr_large
                 st.rerun()
         
         st.markdown("---")
@@ -475,20 +466,8 @@ def main():
             # 현재 질문에 대한 응답만 필터링
             current_responses = [r.get("응답", "") for r in responses if r.get("질문ID") == active_q_id]
             
-            # 응답자 수 계산
-            unique_respondents = len(set([r.get("학번", "") for r in responses if r.get("질문ID") == active_q_id]))
-            
             # 대시보드 헤더
             st.markdown(f"## 현재 질문: {active_q.get('질문', '')}")
-            
-            # 응답자 수 표시 (더 작고 간결하게)
-            st.markdown(
-                f'<div class="stats-container">'
-                f'<div class="stat-item"><h3>응답자 수</h3><h2>{unique_respondents}</h2></div>'
-                f'<div class="stat-item"><h3>총 응답 수</h3><h2>{len(current_responses)}</h2></div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
             
             # 결과 차트
             st.markdown("### 응답 결과")
