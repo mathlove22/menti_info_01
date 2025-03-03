@@ -11,6 +11,9 @@ from collections import Counter
 import re
 import matplotlib as mpl
 import numpy as np
+import matplotlib.font_manager as fm
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 # 페이지 설정
 st.set_page_config(
@@ -19,37 +22,47 @@ st.set_page_config(
     layout="wide"
 )
 
+# 한글 폰트 문제 해결을 위한 웹 폰트 설정
+st.markdown(
+    """
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    """,
+    unsafe_allow_html=True
+)
+
 # 커스텀 CSS
 st.markdown(
     """
     <style>
+    * {
+        font-family: 'Noto Sans KR', sans-serif;
+    }
     .main {
         background-color: #f8f9fa;
     }
     .title {
-        font-family: 'Helvetica', sans-serif;
+        font-family: 'Noto Sans KR', sans-serif;
         font-size: 2.5em;
         color: #2c3e50;
         text-align: center;
         margin-bottom: 20px;
+        font-weight: 700;
     }
     .qr-container {
         background-color: white;
-        padding: 15px;
+        padding: 20px;
         border-radius: 10px;
         text-align: center;
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         margin-bottom: 20px;
     }
-    .qr-large {
+    .qr-image {
         width: 100%; 
-        max-width: 400px;
+        max-width: 600px;
         margin: 0 auto;
-    }
-    .qr-small {
-        width: 100%;
-        max-width: 200px;
-        margin: 0 auto;
+        display: block;
     }
     .dashboard-card {
         background-color: #ffffff;
@@ -175,12 +188,12 @@ def update_question_status(sheet_id, question_id, active_status):
         return False
 
 # QR 코드 생성 함수
-def generate_qr_code(url):
+def generate_qr_code(url, size=10):
     try:
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
+            box_size=size,  # 크기 조절
             border=4,
         )
         qr.add_data(url)
@@ -228,151 +241,103 @@ def analyze_text_responses(responses, max_items=10):
     
     return labels, values
 
-# 화려한 차트 생성 함수
-def create_fancy_chart(data, question_type):
-    if not data:
-        return None
+# PIL을 사용하여 한글 텍스트가 있는 이미지 생성
+def create_image_with_korean_text(data, question_type, width=1200, height=800):
+    # 배경 이미지 생성
+    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
     
     try:
-        # 컬러 팔레트 설정
-        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC', '#9999FF', '#99FFFF', '#FFFF99']
+        # 기본 폰트 설정 (한글 지원 필요)
+        # 폰트 파일 경로는 환경에 따라 다를 수 있음
+        try:
+            # 일반적인 리눅스 시스템의 폰트 경로
+            font_path = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
+            title_font = ImageFont.truetype(font_path, 36)
+            normal_font = ImageFont.truetype(font_path, 24)
+            small_font = ImageFont.truetype(font_path, 18)
+        except:
+            # 폰트를 찾을 수 없는 경우 기본 폰트 사용
+            title_font = ImageFont.load_default()
+            normal_font = ImageFont.load_default()
+            small_font = ImageFont.load_default()
+        
+        # 타이틀 그리기
+        title = "객관식 응답 결과" if question_type.lower() == "객관식" else "단답형 응답 분석 결과"
+        draw.text((width//2, 50), title, fill=(33, 33, 33), font=title_font, anchor="mm")
         
         if question_type.lower() == "객관식":
-            # 객관식 응답 차트 (원형 차트)
+            # 객관식 응답 차트 (막대 그래프)
             counter = Counter(data)
             labels = list(counter.keys())
             values = list(counter.values())
             
-            # 그래프 생성
-            fig, ax = plt.subplots(figsize=(12, 8))
+            # 색상 설정
+            colors = [(255, 99, 132), (54, 162, 235), (255, 206, 86), (75, 192, 192), (153, 102, 255)]
             
-            # 원형 차트와 막대 차트 둘 다 표시
-            # 1. 원형 차트 (좌측)
-            plt.subplot(1, 2, 1)
-            wedges, texts, autotexts = plt.pie(
-                values, 
-                labels=None,  # 레이블 제거
-                autopct='%1.1f%%',
-                startangle=90,
-                shadow=True,
-                colors=colors[:len(values)],
-                wedgeprops={'edgecolor': 'w', 'linewidth': 1, 'antialiased': True},
-                textprops={'fontsize': 14, 'fontweight': 'bold'}
-            )
+            # 막대 그래프 그리기
+            max_value = max(values) if values else 0
+            bar_width = 80
+            bar_spacing = 40
+            left_margin = 100
+            bottom_margin = 100
             
-            # 원형 차트 제목
-            plt.title('응답 분포', fontsize=18, pad=20)
-            
-            # 범례 추가
-            plt.legend(
-                wedges, 
-                labels,
-                title="선택지",
-                loc="center left",
-                bbox_to_anchor=(0.85, 0, 0.5, 1),
-                fontsize=12
-            )
-            
-            # 2. 막대 차트 (우측)
-            plt.subplot(1, 2, 2)
-            bars = plt.bar(
-                range(len(labels)), 
-                values, 
-                color=colors[:len(values)],
-                width=0.6,
-                edgecolor='white',
-                linewidth=2
-            )
-            
-            # 막대 위에 값 표시
-            for bar in bars:
-                height = bar.get_height()
-                plt.text(
-                    bar.get_x() + bar.get_width()/2., 
-                    height + 0.1,
-                    f'{int(height)}',
-                    ha='center', 
-                    va='bottom',
-                    fontsize=12,
-                    fontweight='bold'
-                )
-            
-            plt.title('응답 수', fontsize=18, pad=20)
-            plt.xticks([])  # x축 레이블 제거
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            
-            # 전체 타이틀
-            fig.suptitle('객관식 응답 결과', fontsize=22, y=0.98)
-            plt.tight_layout(rect=[0, 0, 1, 0.95])
-            
-        elif question_type.lower() == "단답형":
-            # 단답형 응답 분석 및 시각화
-            labels, values = analyze_text_responses(data)
-            if labels and values:
-                fig, ax = plt.subplots(figsize=(12, 8))
+            for i, (label, value) in enumerate(zip(labels, values)):
+                # 막대 위치 계산
+                x = left_margin + i * (bar_width + bar_spacing)
+                bar_height = (value / max_value) * (height - 200) if max_value > 0 else 0
+                y = height - bottom_margin - bar_height
                 
-                # 수평 막대 그래프로 표시 (빈도 높은 순)
-                # 역순으로 정렬하여 가장 빈도가 높은 항목이 위에 오도록
-                labels = labels[::-1]
-                values = values[::-1]
+                # 막대 그리기
+                color = colors[i % len(colors)]
+                draw.rectangle([x, y, x + bar_width, height - bottom_margin], fill=color)
                 
-                # 화려한 그라데이션 색상 생성
-                color_gradient = []
-                for i in range(len(labels)):
-                    r = 0.1 + 0.6 * (i / len(labels))
-                    g = 0.3 + 0.4 * np.sin(i / len(labels) * np.pi)
-                    b = 0.8 - 0.6 * (i / len(labels))
-                    color_gradient.append((r, g, b))
+                # 레이블 그리기
+                draw.text((x + bar_width//2, height - bottom_margin + 20), label, fill=(33, 33, 33), font=normal_font, anchor="mt")
                 
-                bars = plt.barh(
-                    range(len(labels)), 
-                    values, 
-                    color=color_gradient,
-                    height=0.6,
-                    edgecolor='white',
-                    linewidth=1.5,
-                    alpha=0.8
-                )
-                
-                # 각 막대 옆에 값과 레이블 표시
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    plt.text(
-                        width + 0.3, 
-                        bar.get_y() + bar.get_height()/2.,
-                        f'{int(width)}',
-                        ha='left', 
-                        va='center',
-                        fontsize=12,
-                        fontweight='bold'
-                    )
-                    
-                    # 레이블 표시
-                    plt.text(
-                        -0.5,  # 막대 왼쪽에 표시
-                        bar.get_y() + bar.get_height()/2.,
-                        labels[i],
-                        ha='right', 
-                        va='center',
-                        fontsize=12
-                    )
-                
-                plt.title('단답형 응답 분석 결과', fontsize=22, pad=20)
-                plt.xlabel('빈도', fontsize=14, labelpad=10)
-                plt.yticks([])  # y축 레이블 제거
-                plt.grid(axis='x', linestyle='--', alpha=0.7)
-                plt.xlim(left=-1)  # 왼쪽 여백 추가
-                plt.tight_layout()
-            else:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                plt.text(0.5, 0.5, '분석할 데이터가 충분하지 않습니다', 
-                       ha='center', va='center', fontsize=16)
-                plt.axis('off')
+                # 값 그리기
+                draw.text((x + bar_width//2, y - 10), str(value), fill=(33, 33, 33), font=normal_font, anchor="mb")
         
-        return fig
+        elif question_type.lower() == "단답형":
+            # 단답형 응답 분석
+            labels, values = analyze_text_responses(data)
+            
+            if labels and values:
+                # 막대 그래프 그리기 (수평)
+                max_value = max(values)
+                bar_height = 40
+                bar_spacing = 20
+                left_margin = 200
+                top_margin = 150
+                
+                for i, (label, value) in enumerate(zip(labels, values)):
+                    # 막대 위치 계산
+                    y = top_margin + i * (bar_height + bar_spacing)
+                    bar_width = (value / max_value) * (width - 300) if max_value > 0 else 0
+                    
+                    # 막대 그리기
+                    color_value = 100 + (155 * i // len(labels))
+                    color = (color_value, 100, 255 - color_value)
+                    draw.rectangle([left_margin, y, left_margin + bar_width, y + bar_height], fill=color)
+                    
+                    # 레이블 그리기
+                    draw.text((left_margin - 10, y + bar_height//2), label, fill=(33, 33, 33), font=normal_font, anchor="rm")
+                    
+                    # 값 그리기
+                    draw.text((left_margin + bar_width + 10, y + bar_height//2), str(value), fill=(33, 33, 33), font=normal_font, anchor="lm")
+            else:
+                draw.text((width//2, height//2), "분석할 데이터가 충분하지 않습니다", fill=(100, 100, 100), font=normal_font, anchor="mm")
+    
     except Exception as e:
-        st.error(f"차트 생성 중 오류: {str(e)}")
-        return None
+        # 오류 메시지
+        draw.text((width//2, height//2), f"차트 생성 오류: {str(e)}", fill=(255, 0, 0), font=normal_font, anchor="mm")
+    
+    # 이미지를 바이트 스트림으로 변환
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    
+    return img_byte_arr
 
 # 시트 초기화 함수
 def initialize_sheets(sheet_id):
@@ -439,31 +404,25 @@ def main():
     # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
     vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
-    # QR 코드 크기 상태 관리
-    if "qr_large" not in st.session_state:
-        st.session_state.qr_large = False
+    # 레이아웃: 사이드바와 메인 컨텐츠
+    col1, col2 = st.columns([1, 2])  # 1:2 비율로 분할
     
-    # 사이드바: QR 코드 및 관리 옵션
-    with st.sidebar:
+    # 왼쪽 컬럼: QR 코드 및 관리 옵션
+    with col1:
         st.markdown("### 투표 참여 QR 코드")
-        qr_img = generate_qr_code(vote_app_url)
+        # QR 코드 크기 조절 슬라이더
+        qr_size = st.slider("QR 코드 크기", min_value=5, max_value=20, value=15, step=1)
+        
+        qr_img = generate_qr_code(vote_app_url, qr_size)
         if qr_img:
-            # QR 코드 크기에 따라 클래스 설정
-            qr_class = "qr-large" if st.session_state.qr_large else "qr-small"
-            
-            # QR 코드 표시
+            # QR 코드 표시 (크기 조절된)
             st.markdown(
                 f'<div class="qr-container">'
-                f'<img src="data:image/png;base64,{qr_img}" class="{qr_class}">'
+                f'<img src="data:image/png;base64,{qr_img}" class="qr-image">'
                 f'<p>QR 코드를 스캔하여 참여하세요</p>'
                 f'</div>',
                 unsafe_allow_html=True
             )
-            
-            # QR 코드 크기 토글 버튼
-            if st.button("QR 코드 크기 변경"):
-                st.session_state.qr_large = not st.session_state.qr_large
-                st.rerun()
         
         st.markdown("---")
         
@@ -528,58 +487,59 @@ def main():
                     time.sleep(1)
                     st.rerun()  # 페이지 새로고침
     
-    # 메인 컨텐츠: 결과 대시보드
-    responses = load_responses(sheet_id)
-    
-    if not responses:
-        st.info("아직 응답 데이터가 없습니다.")
-    else:
-        # 활성화된 질문이 있는지 확인
-        if active_questions:
-            active_q = active_questions[0]
-            active_q_id = active_q.get("질문ID")
-            question_type = active_q.get("유형", "")
-            
-            # 현재 질문에 대한 응답만 필터링
-            current_responses = [r.get("응답", "") for r in responses if r.get("질문ID") == active_q_id]
-            
-            # 대시보드 헤더
-            st.markdown(f"## 현재 질문: {active_q.get('질문', '')}")
-            
-            # 결과 차트
-            st.markdown("### 응답 결과")
-            
-            if current_responses:
-                chart = create_fancy_chart(current_responses, question_type)
-                if chart:
-                    st.pyplot(chart)
-                
-                # 원시 데이터 표시
-                with st.expander("원시 응답 데이터"):
-                    # 응답 데이터를 테이블로 표시
-                    filtered_responses = [r for r in responses if r.get("질문ID") == active_q_id]
-                    
-                    # 한글 표시를 위한 데이터프레임 설정
-                    df = pd.DataFrame(filtered_responses)
-                    
-                    # 한글 인코딩 문제 해결을 위한 설정
-                    st.dataframe(
-                        df,
-                        column_config={
-                            "시간": st.column_config.TextColumn("시간"),
-                            "학번": st.column_config.TextColumn("학번"),
-                            "이름": st.column_config.TextColumn("이름", width="medium"),
-                            "질문ID": st.column_config.TextColumn("질문ID"),
-                            "응답": st.column_config.TextColumn("응답", width="large"),
-                            "세션ID": st.column_config.TextColumn("세션ID", width="small")
-                        },
-                        use_container_width=True
-                    )
-            else:
-                st.info("아직 이 질문에 대한 응답이 없습니다.")
+    # 오른쪽 컬럼: 결과 대시보드
+    with col2:
+        responses = load_responses(sheet_id)
         
+        if not responses:
+            st.info("아직 응답 데이터가 없습니다.")
         else:
-            st.warning("현재 활성화된 질문이 없습니다. 사이드바에서 질문을 활성화해주세요.")
+            # 활성화된 질문이 있는지 확인
+            if active_questions:
+                active_q = active_questions[0]
+                active_q_id = active_q.get("질문ID")
+                question_type = active_q.get("유형", "")
+                
+                # 현재 질문에 대한 응답만 필터링
+                current_responses = [r.get("응답", "") for r in responses if r.get("질문ID") == active_q_id]
+                
+                # 대시보드 헤더
+                st.markdown(f"## 현재 질문: {active_q.get('질문', '')}")
+                
+                # 결과 차트
+                st.markdown("### 응답 결과")
+                
+                if current_responses:
+                    # PIL로 이미지 생성 (한글 지원)
+                    img_bytes = create_image_with_korean_text(current_responses, question_type)
+                    st.image(img_bytes, use_column_width=True)
+                    
+                    # 원시 데이터 표시
+                    with st.expander("원시 응답 데이터"):
+                        # 응답 데이터를 테이블로 표시
+                        filtered_responses = [r for r in responses if r.get("질문ID") == active_q_id]
+                        
+                        # 한글 표시를 위한 데이터프레임 설정
+                        df = pd.DataFrame(filtered_responses)
+                        
+                        # 한글 인코딩 문제 해결을 위한 설정
+                        st.dataframe(
+                            df,
+                            column_config={
+                                "시간": st.column_config.TextColumn("시간"),
+                                "학번": st.column_config.TextColumn("학번"),
+                                "이름": st.column_config.TextColumn("이름", width="medium"),
+                                "질문ID": st.column_config.TextColumn("질문ID"),
+                                "응답": st.column_config.TextColumn("응답", width="large"),
+                                "세션ID": st.column_config.TextColumn("세션ID", width="small")
+                            },
+                            use_container_width=True
+                        )
+                else:
+                    st.info("아직 이 질문에 대한 응답이 없습니다.")
+            
+            else:
+                st.warning("현재 활성화된 질문이 없습니다. 왼쪽 패널에서 질문을 활성화해주세요.")
 
 if __name__ == "__main__":
     main()
