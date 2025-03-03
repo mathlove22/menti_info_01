@@ -6,13 +6,11 @@ import qrcode
 from io import BytesIO
 import base64
 import pandas as pd
-import matplotlib.pyplot as plt
 from collections import Counter
 import re
-import matplotlib as mpl
-import numpy as np
-import platform
-import matplotlib.font_manager as fm
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # 페이지 설정
 st.set_page_config(
@@ -20,34 +18,6 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
-
-# 한글 폰트 설정 (Streamlit Cloud에서 사용 가능한 폰트)
-def set_korean_font():
-    # 시스템에 설치된 폰트 확인
-    system_fonts = fm.findSystemFonts()
-    korean_fonts = []
-    
-    # 한글 폰트 찾기
-    for font_path in system_fonts:
-        try:
-            font = fm.FontProperties(fname=font_path)
-            font_name = font.get_name()
-            if any(k_font in font_name.lower() for k_font in ['nanum', 'malgun', 'gulim', 'batang', 'dotum']):
-                korean_fonts.append(font_path)
-        except:
-            pass
-    
-    # 한글 폰트가 있으면 설정
-    if korean_fonts:
-        plt.rcParams['font.family'] = fm.FontProperties(fname=korean_fonts[0]).get_name()
-    else:
-        # 기본 폰트 사용
-        plt.rcParams['font.family'] = 'DejaVu Sans'
-    
-    plt.rcParams['axes.unicode_minus'] = False
-
-# 한글 폰트 설정 적용
-set_korean_font()
 
 # 커스텀 CSS
 st.markdown(
@@ -276,126 +246,106 @@ def analyze_text_responses(responses, max_items=10):
     
     return labels, values
 
-# 화려한 차트 생성 함수
+# 화려한 차트 생성 함수 (Plotly 버전)
 def create_fancy_chart(data, question_type):
     if not data:
         return None
     
     try:
-        # 컬러 팔레트 설정
-        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC', '#9999FF', '#99FFFF', '#FFFF99']
-        
         if question_type.lower() == "객관식":
-            # 객관식 응답 차트 (원형 차트)
+            # 객관식 응답 차트
             counter = Counter(data)
             labels = list(counter.keys())
             values = list(counter.values())
             
-            # 그래프 생성
-            fig, ax = plt.subplots(figsize=(12, 8))
+            # 데이터프레임 생성
+            df = pd.DataFrame({
+                '선택지': labels,
+                '응답 수': values
+            })
             
-            # 원형 차트와 막대 차트 둘 다 표시
-            # 1. 원형 차트 (좌측)
-            plt.subplot(1, 2, 1)
-            wedges, texts, autotexts = plt.pie(
-                values, 
-                labels=labels,  # 한글 레이블 직접 사용
-                autopct='%1.1f%%',
-                startangle=90,
-                shadow=True,
-                colors=colors[:len(values)],
-                wedgeprops={'edgecolor': 'w', 'linewidth': 1, 'antialiased': True},
-                textprops={'fontsize': 14, 'fontweight': 'bold'}
-            )
+            # 두 개의 서브플롯 생성 (원형 차트 + 막대 차트)
+            fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'xy'}]])
             
-            # 원형 차트 제목
-            plt.title('응답 분포', fontsize=18, pad=20)
+            # 원형 차트 추가
+            fig.add_trace(go.Pie(
+                labels=labels,
+                values=values,
+                textinfo='label+percent',
+                insidetextorientation='radial',
+                marker=dict(
+                    colors=['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC'][:len(df)]
+                ),
+                name='응답 분포'
+            ), 1, 1)
             
-            # 2. 막대 차트 (우측)
-            plt.subplot(1, 2, 2)
-            bars = plt.bar(
-                range(len(labels)), 
-                values, 
-                color=colors[:len(values)],
-                width=0.6,
-                edgecolor='white',
-                linewidth=2
-            )
+            # 막대 차트 추가
+            fig.add_trace(go.Bar(
+                x=df['선택지'],
+                y=df['응답 수'],
+                text=df['응답 수'],
+                textposition='auto',
+                marker_color=['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC'][:len(df)],
+                name='응답 수'
+            ), 1, 2)
             
-            # 막대 위에 값 표시
-            for bar in bars:
-                height = bar.get_height()
-                plt.text(
-                    bar.get_x() + bar.get_width()/2., 
-                    height + 0.1,
-                    f'{int(height)}',
-                    ha='center', 
-                    va='bottom',
-                    fontsize=12,
-                    fontweight='bold'
+            # 차트 레이아웃 설정
+            fig.update_layout(
+                title='객관식 응답 결과',
+                height=500,
+                font=dict(
+                    family="Arial, 'Noto Sans KR', sans-serif",
+                    size=14
                 )
+            )
             
-            plt.title('응답 수', fontsize=18, pad=20)
-            plt.xticks(range(len(labels)), labels, rotation=45, ha='right')  # 한글 레이블 직접 사용
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            
-            # 전체 타이틀
-            fig.suptitle('객관식 응답 결과', fontsize=22, y=0.98)
-            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            return fig
             
         elif question_type.lower() == "단답형":
-            # 단답형 응답 분석 및 시각화
+            # 단어 빈도 분석
             labels, values = analyze_text_responses(data)
             if labels and values:
-                fig, ax = plt.subplots(figsize=(12, 8))
+                # 데이터프레임 생성
+                df = pd.DataFrame({
+                    '단어': labels,
+                    '빈도': values
+                }).sort_values('빈도', ascending=True)  # 오름차순 정렬
                 
-                # 수평 막대 그래프로 표시 (빈도 높은 순)
-                # 역순으로 정렬하여 가장 빈도가 높은 항목이 위에 오도록
-                labels = labels[::-1]
-                values = values[::-1]
-                
-                # 화려한 그라데이션 색상 생성
-                color_gradient = []
-                for i in range(len(labels)):
-                    r = 0.1 + 0.6 * (i / len(labels))
-                    g = 0.3 + 0.4 * np.sin(i / len(labels) * np.pi)
-                    b = 0.8 - 0.6 * (i / len(labels))
-                    color_gradient.append((r, g, b))
-                
-                bars = plt.barh(
-                    labels,  # 한글 레이블 직접 사용
-                    values, 
-                    color=color_gradient,
-                    height=0.6,
-                    edgecolor='white',
-                    linewidth=1.5,
-                    alpha=0.8
+                # 수평 막대 차트 생성
+                fig = px.bar(
+                    df, 
+                    x='빈도', 
+                    y='단어', 
+                    orientation='h',
+                    text='빈도',
+                    color='빈도',
+                    color_continuous_scale='Viridis'
                 )
                 
-                # 각 막대 옆에 값 표시
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    plt.text(
-                        width + 0.3, 
-                        bar.get_y() + bar.get_height()/2.,
-                        f'{int(width)}',
-                        ha='left', 
-                        va='center',
-                        fontsize=12,
-                        fontweight='bold'
+                # 차트 레이아웃 설정
+                fig.update_layout(
+                    title='단답형 응답 분석 결과',
+                    xaxis_title='빈도',
+                    yaxis_title='',
+                    height=500,
+                    font=dict(
+                        family="Arial, 'Noto Sans KR', sans-serif",
+                        size=14
                     )
+                )
                 
-                plt.title('단답형 응답 분석 결과', fontsize=22, pad=20)
-                plt.xlabel('빈도', fontsize=14, labelpad=10)
-                plt.grid(axis='x', linestyle='--', alpha=0.7)
-                plt.tight_layout()
+                return fig
             else:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                plt.text(0.5, 0.5, '분석할 데이터가 충분하지 않습니다', 
-                       ha='center', va='center', fontsize=16)
-                plt.axis('off')
-        
-        return fig
+                # 데이터가 없는 경우
+                fig = go.Figure()
+                fig.add_annotation(
+                    text="분석할 데이터가 충분하지 않습니다",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False,
+                    font=dict(size=16)
+                )
+                fig.update_layout(height=400)
+                return fig
     except Exception as e:
         st.error(f"차트 생성 중 오류: {str(e)}")
         return None
@@ -578,7 +528,7 @@ def main():
             if current_responses:
                 chart = create_fancy_chart(current_responses, question_type)
                 if chart:
-                    st.pyplot(chart)
+                    st.plotly_chart(chart, use_container_width=True)
                 
                 # 원시 데이터 표시
                 with st.expander("원시 응답 데이터"):
