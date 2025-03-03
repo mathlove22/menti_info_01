@@ -42,16 +42,20 @@ st.markdown(
 # 구글 시트 연결 설정
 @st.cache_resource
 def get_gsheet_connection():
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    try:
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
 
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gcp_service_account"], scope
-    )
-    client = gspread.authorize(credentials)
-    return client
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            st.secrets["gcp_service_account"], scope
+        )
+        client = gspread.authorize(credentials)
+        return client
+    except Exception as e:
+        st.error(f"인증 오류: {str(e)}")
+        return None
 
 # QR 코드 생성 함수
 def generate_qr_code(url):
@@ -78,10 +82,11 @@ def generate_qr_code(url):
 def main():
     st.markdown('<div class="title">실시간 투표 관리자 대시보드</div>', unsafe_allow_html=True)
     
-    # 구글 시트 ID
-    sheet_id = "1DeLOnDJ4KdtZfKwEMAnYWqINTKx7vv22c3SQCu6lxQY"
+    # 구글 시트 ID (secrets에서 가져오기)
+    sheet_id = st.secrets.get("general", {}).get("sheet_id", "1DeLOnDJ4KdtZfKwEMAnYWqINTKx7vv22c3SQCu6lxQY")
     
-    # 투표 앱 URL (배포 후 수정 필요)
+    # 투표 앱 URL - 배포 후 실제 URL로 변경 필요
+    # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
     vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
     # 사이드바: QR 코드 및 관리 옵션
@@ -100,12 +105,18 @@ def main():
         if st.button("시트 초기화 (샘플 질문 추가)", use_container_width=True):
             try:
                 client = get_gsheet_connection()
+                if not client:
+                    st.error("구글 시트 연결에 실패했습니다.")
+                    return
+                    
                 sheet = client.open_by_key(sheet_id)
                 
                 # 시트1 초기화 (질문)
-                if sheet.worksheet_count < 1:
-                    sheet.add_worksheet(title="질문", rows=1, cols=10)
-                worksheet = sheet.get_worksheet(0)
+                try:
+                    worksheet = sheet.get_worksheet(0)
+                except:
+                    worksheet = sheet.add_worksheet(title="질문", rows=1, cols=10)
+                
                 worksheet.clear()
                 
                 # 헤더 설정
@@ -122,9 +133,11 @@ def main():
                     worksheet.append_row(q)
                 
                 # 시트2 초기화 (응답)
-                if sheet.worksheet_count < 2:
-                    sheet.add_worksheet(title="응답", rows=1, cols=6)
-                response_ws = sheet.get_worksheet(1)
+                try:
+                    response_ws = sheet.get_worksheet(1)
+                except:
+                    response_ws = sheet.add_worksheet(title="응답", rows=1, cols=6)
+                
                 response_ws.clear()
                 response_headers = ["시간", "학번", "이름", "질문ID", "응답", "세션ID"]
                 response_ws.append_row(response_headers)
@@ -141,9 +154,24 @@ def main():
     if st.button("구글 시트 연결 테스트"):
         try:
             client = get_gsheet_connection()
+            if not client:
+                st.error("구글 시트 연결에 실패했습니다.")
+                return
+                
             sheet = client.open_by_key(sheet_id)
             worksheet_count = sheet.worksheet_count
+            
+            # 워크시트 목록 가져오기
+            worksheet_names = [ws.title for ws in sheet.worksheets()]
+            
             st.success(f"연결 성공! 시트 수: {worksheet_count}")
+            st.write(f"워크시트 목록: {', '.join(worksheet_names)}")
+            
+            # 서비스 계정 정보 확인
+            service_account_email = st.secrets["gcp_service_account"]["client_email"]
+            st.info(f"사용 중인 서비스 계정: {service_account_email}")
+            
+            st.warning("시트에 이 서비스 계정 이메일을 편집자로 공유했는지 확인하세요.")
         except Exception as e:
             st.error(f"연결 실패: {str(e)}")
 
