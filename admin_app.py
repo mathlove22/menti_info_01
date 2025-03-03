@@ -87,7 +87,7 @@ def main():
     
     # 투표 앱 URL - 배포 후 실제 URL로 변경 필요
     # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
-    vote_app_url = "https://your-vote-app-url.streamlit.app"  
+    vote_app_url = "https://mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr.streamlit.app/"  
     
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
