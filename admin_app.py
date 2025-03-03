@@ -53,6 +53,7 @@ set_korean_font()
 st.markdown(
     """
     <style>
+    /* 기본 스타일 */
     .main {
         background-color: #f8f9fa;
     }
@@ -87,6 +88,23 @@ st.markdown(
         padding: 20px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
+    }
+    
+    /* 사이드바 너비 조정 범위 확장 */
+    [data-testid="stSidebar"] {
+        min-width: 1px;  /* 최소 너비를 작게 설정 */
+        max-width: 1000px;  /* 최대 너비를 크게 설정 */
+        width: 450px;  /* 기본 너비 설정 */
+    }
+    
+    /* 드래그 핸들 영역 확장 */
+    [data-testid="stSidebarUserContent"] {
+        width: 100%;
+    }
+    
+    /* 메인 컨텐츠 영역 최소 너비 설정 */
+    .main .block-container {
+        min-width: 300px;  /* 메인 컨텐츠의 최소 너비 설정 */
     }
     </style>
     """,
