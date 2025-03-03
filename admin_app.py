@@ -87,7 +87,7 @@ def main():
     
     # 투표 앱 URL - 배포 후 실제 URL로 변경 필요
     # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
-    vote_app_url = "https://mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr.streamlit.app/"  
+    vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
@@ -113,7 +113,7 @@ def main():
                 
                 # 시트1 초기화 (질문)
                 try:
-                    worksheet = sheet.get_worksheet(0)
+                    worksheet = sheet.worksheet("질문")
                 except:
                     worksheet = sheet.add_worksheet(title="질문", rows=1, cols=10)
                 
@@ -134,7 +134,7 @@ def main():
                 
                 # 시트2 초기화 (응답)
                 try:
-                    response_ws = sheet.get_worksheet(1)
+                    response_ws = sheet.worksheet("응답")
                 except:
                     response_ws = sheet.add_worksheet(title="응답", rows=1, cols=6)
                 
@@ -159,12 +159,12 @@ def main():
                 return
                 
             sheet = client.open_by_key(sheet_id)
-            worksheet_count = sheet.worksheet_count
             
-            # 워크시트 목록 가져오기
-            worksheet_names = [ws.title for ws in sheet.worksheets()]
+            # 워크시트 목록 가져오기 (worksheet_count 대신 worksheets() 메서드 사용)
+            worksheets = sheet.worksheets()
+            worksheet_names = [ws.title for ws in worksheets]
             
-            st.success(f"연결 성공! 시트 수: {worksheet_count}")
+            st.success(f"연결 성공! 시트 수: {len(worksheets)}")
             st.write(f"워크시트 목록: {', '.join(worksheet_names)}")
             
             # 서비스 계정 정보 확인
