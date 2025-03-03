@@ -37,24 +37,6 @@ st.markdown(
         border-radius: 10px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .option-box {
-        background-color: #ffffff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 8px 0;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    .option-box:hover {
-        background-color: #f0f8ff;
-        border-color: #3366cc;
-    }
-    .selected {
-        background-color: #e6f0ff;
-        border-color: #3366cc;
-        font-weight: bold;
-    }
     .stTextInput, .stTextArea {
         background-color: #ffffff;
         border-radius: 8px;
@@ -82,26 +64,35 @@ def get_gsheet_connection():
 # 구글 시트에서 질문 데이터 가져오기
 @st.cache_data(ttl=5)  # 5초마다 데이터 새로고침
 def load_questions(sheet_id):
-    client = get_gsheet_connection()
-    sheet = client.open_by_key(sheet_id)
-    worksheet = sheet.get_worksheet(0)  # 시트1 (질문/답변)
-    data = worksheet.get_all_records()
-    return data
+    try:
+        client = get_gsheet_connection()
+        sheet = client.open_by_key(sheet_id)
+        worksheet = sheet.get_worksheet(0)  # 시트1 (질문/답변)
+        data = worksheet.get_all_records()
+        return data
+    except Exception as e:
+        st.error(f"질문 데이터를 불러오는 중 오류 발생: {str(e)}")
+        return []
 
 # 응답 저장 함수
 def save_response(sheet_id, response_data):
-    client = get_gsheet_connection()
-    sheet = client.open_by_key(sheet_id)
-    
-    # 두 번째 시트가 없으면 생성
-    if sheet.worksheet_count < 2:
-        sheet.add_worksheet(title="응답", rows=1, cols=6)
-        worksheet = sheet.get_worksheet(1)
-        worksheet.append_row(["시간", "학번", "이름", "질문ID", "응답", "세션ID"])
-    else:
-        worksheet = sheet.get_worksheet(1)  # 시트2 (학생 응답)
-    
-    worksheet.append_row(response_data)
+    try:
+        client = get_gsheet_connection()
+        sheet = client.open_by_key(sheet_id)
+        
+        # 두 번째 시트가 없으면 생성
+        if sheet.worksheet_count < 2:
+            sheet.add_worksheet(title="응답", rows=1, cols=6)
+            worksheet = sheet.get_worksheet(1)
+            worksheet.append_row(["시간", "학번", "이름", "질문ID", "응답", "세션ID"])
+        else:
+            worksheet = sheet.get_worksheet(1)  # 시트2 (학생 응답)
+        
+        worksheet.append_row(response_data)
+        return True
+    except Exception as e:
+        st.error(f"응답 저장 중 오류 발생: {str(e)}")
+        return False
 
 # 세션 ID 생성 (사용자 추적용)
 if "session_id" not in st.session_state:
@@ -178,11 +169,11 @@ def main():
                                 options[st.session_state.selected_option],  # 선택한 옵션
                                 st.session_state.session_id  # 세션 ID
                             ]
-                            save_response(sheet_id, response)
-                            st.session_state[f"answered_{active_question.get('질문ID', '')}"] = True
-                            st.success("응답이 제출되었습니다!")
-                            time.sleep(1)
-                            st.experimental_rerun()
+                            if save_response(sheet_id, response):
+                                st.session_state[f"answered_{active_question.get('질문ID', '')}"] = True
+                                st.success("응답이 제출되었습니다!")
+                                time.sleep(1)
+                                st.experimental_rerun()
                     
                     # 단답형 질문
                     elif question_type == "단답형":
@@ -198,26 +189,19 @@ def main():
                                 answer.strip(),  # 입력한 답변
                                 st.session_state.session_id  # 세션 ID
                             ]
-                            save_response(sheet_id, response)
-                            st.session_state[f"answered_{active_question.get('질문ID', '')}"] = True
-                            st.success("응답이 제출되었습니다!")
-                            time.sleep(1)
-                            st.experimental_rerun()
+                            if save_response(sheet_id, response):
+                                st.session_state[f"answered_{active_question.get('질문ID', '')}"] = True
+                                st.success("응답이 제출되었습니다!")
+                                time.sleep(1)
+                                st.experimental_rerun()
                 
                 else:
                     st.success("이 질문에 이미 응답하셨습니다.")
                     st.markdown(f'<div class="question">{active_question.get("질문", "")}</div>', unsafe_allow_html=True)
                     st.info("다음 질문을 기다려주세요.")
-                    
-                    # 5초마다 새로고침 (비활성화, 필요시 주석 해제)
-                    # time.sleep(5)
-                    # st.experimental_rerun()
             
             else:
                 st.info("현재 활성화된 질문이 없습니다. 잠시 후 다시 확인해주세요.")
-                # 5초마다 새로고침 (비활성화, 필요시 주석 해제)
-                # time.sleep(5)
-                # st.experimental_rerun()
                 
             # 로그아웃 버튼
             if st.button("다른 계정으로 참여하기", use_container_width=True):
