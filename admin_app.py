@@ -9,9 +9,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import re
-import matplotlib as mpl
 import numpy as np
-import platform
+import os
+import urllib.request
 import matplotlib.font_manager as fm
 
 # 페이지 설정
@@ -21,30 +21,56 @@ st.set_page_config(
     layout="wide"
 )
 
-# 한글 폰트 설정 (Streamlit Cloud에서 사용 가능한 폰트)
+# 한글 폰트 설정 함수
 def set_korean_font():
-    # 시스템에 설치된 폰트 확인
-    system_fonts = fm.findSystemFonts()
-    korean_fonts = []
+    # 폰트 파일 다운로드 및 등록 (Streamlit Cloud에서 실행 시)
+    font_dir = os.path.join(os.path.expanduser('~'), '.fonts')
+    os.makedirs(font_dir, exist_ok=True)
+    font_path = os.path.join(font_dir, 'NanumGothic.ttf')
     
-    # 한글 폰트 찾기
-    for font_path in system_fonts:
+    if not os.path.exists(font_path):
         try:
-            font = fm.FontProperties(fname=font_path)
-            font_name = font.get_name()
-            if any(k_font in font_name.lower() for k_font in ['nanum', 'malgun', 'gulim', 'batang', 'dotum']):
-                korean_fonts.append(font_path)
-        except:
-            pass
+            # 나눔고딕 폰트 다운로드
+            font_url = 'https://raw.githubusercontent.com/naver/nanumfont/master/NanumFont_TTF_ALL/NanumGothic.ttf'
+            urllib.request.urlretrieve(font_url, font_path)
+            st.success("한글 폰트가 성공적으로 다운로드되었습니다.")
+        except Exception as e:
+            st.warning(f"폰트 다운로드 중 오류 발생: {str(e)}")
     
-    # 한글 폰트가 있으면 설정
-    if korean_fonts:
-        plt.rcParams['font.family'] = fm.FontProperties(fname=korean_fonts[0]).get_name()
-    else:
-        # 기본 폰트 사용
+    try:
+        # 시스템에 설치된 폰트 확인
+        system_fonts = fm.findSystemFonts()
+        korean_fonts = []
+        
+        # 한글 폰트 찾기
+        for f_path in system_fonts:
+            try:
+                font = fm.FontProperties(fname=f_path)
+                font_name = font.get_name()
+                if any(k_font in font_name.lower() for k_font in ['nanum', 'malgun', 'gulim', 'batang', 'dotum']):
+                    korean_fonts.append(f_path)
+            except:
+                pass
+        
+        # 다운로드한 나눔고딕 폰트 추가
+        if os.path.exists(font_path):
+            korean_fonts.append(font_path)
+        
+        # 한글 폰트가 있으면 설정
+        if korean_fonts:
+            font_prop = fm.FontProperties(fname=korean_fonts[0])
+            plt.rcParams['font.family'] = font_prop.get_name()
+        else:
+            # 기본 폰트 사용
+            plt.rcParams['font.family'] = 'DejaVu Sans'
+            st.warning("한글 폰트를 찾을 수 없어 기본 폰트를 사용합니다.")
+        
+        plt.rcParams['axes.unicode_minus'] = False
+    except Exception as e:
+        st.warning(f"폰트 설정 중 오류 발생: {str(e)}")
+        # 기본 설정으로 대체
         plt.rcParams['font.family'] = 'DejaVu Sans'
-    
-    plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['axes.unicode_minus'] = False
 
 # 한글 폰트 설정 적용
 set_korean_font()
@@ -53,11 +79,16 @@ set_korean_font()
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+    
+    * {
+        font-family: 'Noto Sans KR', sans-serif;
+    }
     .main {
         background-color: #f8f9fa;
     }
     .title {
-        font-family: 'Helvetica', sans-serif;
+        font-family: 'Noto Sans KR', sans-serif;
         font-size: 2.5em;
         color: #2c3e50;
         text-align: center;
@@ -258,7 +289,7 @@ def analyze_text_responses(responses, max_items=10):
     
     return labels, values
 
-# 화려한 차트 생성 함수
+# 차트 생성 함수
 def create_fancy_chart(data, question_type):
     if not data:
         return None
@@ -266,6 +297,13 @@ def create_fancy_chart(data, question_type):
     try:
         # 컬러 팔레트 설정
         colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC', '#9999FF', '#99FFFF', '#FFFF99']
+        
+        # 한글 폰트 명시적 설정
+        font_path = os.path.join(os.path.expanduser('~'), '.fonts', 'NanumGothic.ttf')
+        if os.path.exists(font_path):
+            font_prop = fm.FontProperties(fname=font_path)
+        else:
+            font_prop = fm.FontProperties(family='DejaVu Sans')
         
         if question_type.lower() == "객관식":
             # 객관식 응답 차트 (원형 차트)
@@ -281,17 +319,17 @@ def create_fancy_chart(data, question_type):
             plt.subplot(1, 2, 1)
             wedges, texts, autotexts = plt.pie(
                 values, 
-                labels=labels,  # 한글 레이블 직접 사용
+                labels=labels,
                 autopct='%1.1f%%',
                 startangle=90,
                 shadow=True,
                 colors=colors[:len(values)],
                 wedgeprops={'edgecolor': 'w', 'linewidth': 1, 'antialiased': True},
-                textprops={'fontsize': 14, 'fontweight': 'bold'}
+                textprops={'fontsize': 14, 'fontweight': 'bold', 'fontproperties': font_prop}
             )
             
             # 원형 차트 제목
-            plt.title('응답 분포', fontsize=18, pad=20)
+            plt.title('응답 분포', fontsize=18, pad=20, fontproperties=font_prop)
             
             # 2. 막대 차트 (우측)
             plt.subplot(1, 2, 2)
@@ -314,15 +352,16 @@ def create_fancy_chart(data, question_type):
                     ha='center', 
                     va='bottom',
                     fontsize=12,
-                    fontweight='bold'
+                    fontweight='bold',
+                    fontproperties=font_prop
                 )
             
-            plt.title('응답 수', fontsize=18, pad=20)
-            plt.xticks(range(len(labels)), labels, rotation=45, ha='right')  # 한글 레이블 직접 사용
+            plt.title('응답 수', fontsize=18, pad=20, fontproperties=font_prop)
+            plt.xticks(range(len(labels)), labels, rotation=45, ha='right', fontproperties=font_prop)
             plt.grid(axis='y', linestyle='--', alpha=0.7)
             
             # 전체 타이틀
-            fig.suptitle('객관식 응답 결과', fontsize=22, y=0.98)
+            fig.suptitle('객관식 응답 결과', fontsize=22, y=0.98, fontproperties=font_prop)
             plt.tight_layout(rect=[0, 0, 1, 0.95])
             
         elif question_type.lower() == "단답형":
@@ -345,7 +384,7 @@ def create_fancy_chart(data, question_type):
                     color_gradient.append((r, g, b))
                 
                 bars = plt.barh(
-                    labels,  # 한글 레이블 직접 사용
+                    labels,
                     values, 
                     color=color_gradient,
                     height=0.6,
@@ -364,17 +403,19 @@ def create_fancy_chart(data, question_type):
                         ha='left', 
                         va='center',
                         fontsize=12,
-                        fontweight='bold'
+                        fontweight='bold',
+                        fontproperties=font_prop
                     )
                 
-                plt.title('단답형 응답 분석 결과', fontsize=22, pad=20)
-                plt.xlabel('빈도', fontsize=14, labelpad=10)
+                plt.title('단답형 응답 분석 결과', fontsize=22, pad=20, fontproperties=font_prop)
+                plt.xlabel('빈도', fontsize=14, labelpad=10, fontproperties=font_prop)
+                plt.yticks(fontproperties=font_prop)
                 plt.grid(axis='x', linestyle='--', alpha=0.7)
                 plt.tight_layout()
             else:
                 fig, ax = plt.subplots(figsize=(10, 6))
                 plt.text(0.5, 0.5, '분석할 데이터가 충분하지 않습니다', 
-                       ha='center', va='center', fontsize=16)
+                       ha='center', va='center', fontsize=16, fontproperties=font_prop)
                 plt.axis('off')
         
         return fig
@@ -543,6 +584,7 @@ def main():
         st.info("아직 응답 데이터가 없습니다.")
     else:
         # 활성화된 질문이 있는지 확인
+        active_questions = [q for q in questions if q.get("활성화", "").lower() in ["y", "yes"]]
         if active_questions:
             active_q = active_questions[0]
             active_q_id = active_q.get("질문ID")
