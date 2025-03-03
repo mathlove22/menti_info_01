@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 import re
 import matplotlib as mpl
-import os
+import numpy as np
 
 # 페이지 설정
 st.set_page_config(
@@ -18,11 +18,6 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
-
-# 한글 폰트 설정 (Streamlit Cloud에서 사용 가능한 폰트)
-plt.rcParams['axes.unicode_minus'] = False
-# DejaVu Sans는 기본적으로 설치되어 있어 한글 표시 가능
-plt.rcParams['font.family'] = 'DejaVu Sans'
 
 # 커스텀 CSS
 st.markdown(
@@ -43,14 +38,18 @@ st.markdown(
         padding: 15px;
         border-radius: 10px;
         text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         margin-bottom: 20px;
     }
     .qr-large {
-        width: 300px;
+        width: 100%; 
+        max-width: 400px;
+        margin: 0 auto;
     }
     .qr-small {
-        width: 200px;
+        width: 100%;
+        max-width: 200px;
+        margin: 0 auto;
     }
     .dashboard-card {
         background-color: #ffffff;
@@ -229,70 +228,148 @@ def analyze_text_responses(responses, max_items=10):
     
     return labels, values
 
-# 차트 생성 함수
-def create_chart(data, question_type):
+# 화려한 차트 생성 함수
+def create_fancy_chart(data, question_type):
     if not data:
         return None
     
     try:
-        # 한글 지원을 위한 폰트 설정
-        plt.figure(figsize=(10, 6))
+        # 컬러 팔레트 설정
+        colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC', '#9999FF', '#99FFFF', '#FFFF99']
         
         if question_type.lower() == "객관식":
-            # 객관식 응답 차트 (막대 그래프)
+            # 객관식 응답 차트 (원형 차트)
             counter = Counter(data)
             labels = list(counter.keys())
             values = list(counter.values())
             
-            # 영문 레이블로 먼저 그래프 생성
-            temp_labels = [f"Option {i+1}" for i in range(len(labels))]
-            bars = plt.bar(temp_labels, values, color='#5DA5DA')
+            # 그래프 생성
+            fig, ax = plt.subplots(figsize=(12, 8))
             
-            # 각 막대 위에 값 표시
+            # 원형 차트와 막대 차트 둘 다 표시
+            # 1. 원형 차트 (좌측)
+            plt.subplot(1, 2, 1)
+            wedges, texts, autotexts = plt.pie(
+                values, 
+                labels=None,  # 레이블 제거
+                autopct='%1.1f%%',
+                startangle=90,
+                shadow=True,
+                colors=colors[:len(values)],
+                wedgeprops={'edgecolor': 'w', 'linewidth': 1, 'antialiased': True},
+                textprops={'fontsize': 14, 'fontweight': 'bold'}
+            )
+            
+            # 원형 차트 제목
+            plt.title('응답 분포', fontsize=18, pad=20)
+            
+            # 범례 추가
+            plt.legend(
+                wedges, 
+                labels,
+                title="선택지",
+                loc="center left",
+                bbox_to_anchor=(0.85, 0, 0.5, 1),
+                fontsize=12
+            )
+            
+            # 2. 막대 차트 (우측)
+            plt.subplot(1, 2, 2)
+            bars = plt.bar(
+                range(len(labels)), 
+                values, 
+                color=colors[:len(values)],
+                width=0.6,
+                edgecolor='white',
+                linewidth=2
+            )
+            
+            # 막대 위에 값 표시
             for bar in bars:
                 height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                        f'{height}', ha='center', va='bottom')
+                plt.text(
+                    bar.get_x() + bar.get_width()/2., 
+                    height + 0.1,
+                    f'{int(height)}',
+                    ha='center', 
+                    va='bottom',
+                    fontsize=12,
+                    fontweight='bold'
+                )
             
-            plt.ylabel('Number of Responses')
-            plt.title('Multiple Choice Results')
-            plt.xticks(rotation=45, ha='right')
+            plt.title('응답 수', fontsize=18, pad=20)
+            plt.xticks([])  # x축 레이블 제거
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
             
-            # 실제 레이블 표시
-            for i, (bar, label) in enumerate(zip(bars, labels)):
-                plt.text(bar.get_x() + bar.get_width()/2., -0.5, 
-                       label, ha='center', va='top', rotation=45)
-            
-            plt.tight_layout()
+            # 전체 타이틀
+            fig.suptitle('객관식 응답 결과', fontsize=22, y=0.98)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
             
         elif question_type.lower() == "단답형":
             # 단답형 응답 분석 및 시각화
             labels, values = analyze_text_responses(data)
             if labels and values:
-                # 영문 레이블로 먼저 그래프 생성
-                temp_labels = [f"Word {i+1}" for i in range(len(labels))]
-                bars = plt.barh(temp_labels, values, color='#5DA5DA')
+                fig, ax = plt.subplots(figsize=(12, 8))
                 
-                # 각 막대 옆에 값 표시
-                for bar in bars:
+                # 수평 막대 그래프로 표시 (빈도 높은 순)
+                # 역순으로 정렬하여 가장 빈도가 높은 항목이 위에 오도록
+                labels = labels[::-1]
+                values = values[::-1]
+                
+                # 화려한 그라데이션 색상 생성
+                color_gradient = []
+                for i in range(len(labels)):
+                    r = 0.1 + 0.6 * (i / len(labels))
+                    g = 0.3 + 0.4 * np.sin(i / len(labels) * np.pi)
+                    b = 0.8 - 0.6 * (i / len(labels))
+                    color_gradient.append((r, g, b))
+                
+                bars = plt.barh(
+                    range(len(labels)), 
+                    values, 
+                    color=color_gradient,
+                    height=0.6,
+                    edgecolor='white',
+                    linewidth=1.5,
+                    alpha=0.8
+                )
+                
+                # 각 막대 옆에 값과 레이블 표시
+                for i, bar in enumerate(bars):
                     width = bar.get_width()
-                    plt.text(width + 0.1, bar.get_y() + bar.get_height()/2.,
-                            f'{width}', ha='left', va='center')
+                    plt.text(
+                        width + 0.3, 
+                        bar.get_y() + bar.get_height()/2.,
+                        f'{int(width)}',
+                        ha='left', 
+                        va='center',
+                        fontsize=12,
+                        fontweight='bold'
+                    )
+                    
+                    # 레이블 표시
+                    plt.text(
+                        -0.5,  # 막대 왼쪽에 표시
+                        bar.get_y() + bar.get_height()/2.,
+                        labels[i],
+                        ha='right', 
+                        va='center',
+                        fontsize=12
+                    )
                 
-                # 실제 레이블 표시
-                for i, (bar, label) in enumerate(zip(bars, labels)):
-                    plt.text(0, bar.get_y() + bar.get_height()/2., 
-                           label, ha='right', va='center')
-                
-                plt.xlabel('Frequency')
-                plt.title('Text Response Analysis')
+                plt.title('단답형 응답 분석 결과', fontsize=22, pad=20)
+                plt.xlabel('빈도', fontsize=14, labelpad=10)
+                plt.yticks([])  # y축 레이블 제거
+                plt.grid(axis='x', linestyle='--', alpha=0.7)
+                plt.xlim(left=-1)  # 왼쪽 여백 추가
                 plt.tight_layout()
             else:
-                plt.text(0.5, 0.5, 'Not enough data to analyze', 
-                       ha='center', va='center', fontsize=12)
+                fig, ax = plt.subplots(figsize=(10, 6))
+                plt.text(0.5, 0.5, '분석할 데이터가 충분하지 않습니다', 
+                       ha='center', va='center', fontsize=16)
                 plt.axis('off')
         
-        return plt
+        return fig
     except Exception as e:
         st.error(f"차트 생성 중 오류: {str(e)}")
         return None
@@ -473,7 +550,7 @@ def main():
             st.markdown("### 응답 결과")
             
             if current_responses:
-                chart = create_chart(current_responses, question_type)
+                chart = create_fancy_chart(current_responses, question_type)
                 if chart:
                     st.pyplot(chart)
                 
