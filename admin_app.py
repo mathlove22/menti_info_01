@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import re
+import matplotlib.font_manager as fm
 
 # 페이지 설정
 st.set_page_config(
@@ -16,6 +17,10 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
+
+# 한글 폰트 설정
+plt.rcParams['font.family'] = 'NanumGothic'  # 또는 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
 
 # 커스텀 CSS
 st.markdown(
@@ -33,10 +38,19 @@ st.markdown(
     }
     .qr-container {
         background-color: white;
-        padding: 20px;
+        padding: 15px;
         border-radius: 10px;
         text-align: center;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        cursor: pointer;
+    }
+    .qr-large {
+        max-width: 350px;
+        margin: 0 auto;
+    }
+    .qr-small {
+        max-width: 200px;
+        margin: 0 auto;
     }
     .dashboard-card {
         background-color: #ffffff;
@@ -45,16 +59,35 @@ st.markdown(
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    .metric-card {
+    .stats-container {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    .stat-item {
         background-color: #f1f8ff;
+        padding: 10px 15px;
         border-radius: 8px;
-        padding: 15px;
         text-align: center;
+        flex: 1;
+        margin: 0 5px;
+    }
+    .stat-item h3 {
+        font-size: 1em;
+        margin: 0;
+    }
+    .stat-item h2 {
+        font-size: 1.5em;
+        margin: 5px 0 0 0;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+# QR 코드 토글 상태 초기화
+if "qr_expanded" not in st.session_state:
+    st.session_state.qr_expanded = False
 
 # 구글 시트 연결 설정
 @st.cache_resource
@@ -235,9 +268,6 @@ def create_chart(data, question_type):
             labels = list(counter.keys())
             values = list(counter.values())
             
-            # 한글 폰트 설정
-            plt.rc('font', family='DejaVu Sans')
-            
             bars = plt.bar(range(len(labels)), values, color='#5DA5DA')
             
             # 각 막대 위에 값 표시
@@ -255,9 +285,6 @@ def create_chart(data, question_type):
             # 단답형 응답 분석 및 시각화
             labels, values = analyze_text_responses(data)
             if labels and values:
-                # 한글 폰트 설정
-                plt.rc('font', family='DejaVu Sans')
-                
                 # 수평 막대 그래프로 표시 (빈도 높은 순)
                 bars = plt.barh(range(len(labels)), values, color='#5DA5DA')
                 
@@ -335,6 +362,10 @@ def initialize_sheets(sheet_id):
         st.error(f"시트 초기화 중 오류 발생: {str(e)}")
         return False
 
+# QR 코드 토글 함수
+def toggle_qr_size():
+    st.session_state.qr_expanded = not st.session_state.qr_expanded
+
 # 메인 앱
 def main():
     st.markdown('<div class="title">실시간 투표 관리자 대시보드</div>', unsafe_allow_html=True)
@@ -346,20 +377,34 @@ def main():
     # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
     vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
-    # 자동 새로고침 설정
-    auto_refresh = st.sidebar.checkbox("자동 새로고침", value=False)
-    if auto_refresh:
-        refresh_interval = st.sidebar.slider("새로고침 간격(초)", min_value=3, max_value=60, value=10)
-    
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
         st.markdown("### 투표 참여 QR 코드")
         qr_img = generate_qr_code(vote_app_url)
         if qr_img:
+            # QR 코드 클릭 시 크기 토글
+            qr_class = "qr-large" if st.session_state.qr_expanded else "qr-small"
             st.markdown(
-                f'<div class="qr-container"><img src="data:image/png;base64,{qr_img}" width="250"><p>QR 코드를 스캔하여 참여하세요</p></div>',
+                f'<div class="qr-container" onclick="this.classList.toggle(\'qr-large\');">'
+                f'<img src="data:image/png;base64,{qr_img}" class="{qr_class}">'
+                f'<p>QR 코드를 스캔하여 참여하세요<br>(클릭하여 크기 변경)</p>'
+                f'</div>',
                 unsafe_allow_html=True
             )
+            
+            # QR 코드 크기 토글 버튼
+            if st.button("QR 코드 크기 변경", key="qr_toggle"):
+                toggle_qr_size()
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # 수동 새로고침 버튼
+        if st.button("데이터 새로고침", use_container_width=True):
+            st.cache_data.clear()  # 캐시 지우기
+            st.success("데이터가 새로고침되었습니다.")
+            time.sleep(1)
+            st.rerun()
         
         st.markdown("---")
         
@@ -377,7 +422,6 @@ def main():
                 if initialize_sheets(sheet_id):
                     st.success("시트가 초기화되었습니다. 샘플 질문이 추가되었습니다.")
                     st.cache_data.clear()  # 캐시 지우기
-                    st.cache_resource.clear()  # 캐시 지우기
                     time.sleep(1)
                     st.rerun()  # 페이지 새로고침
         else:
@@ -437,18 +481,14 @@ def main():
             # 대시보드 헤더
             st.markdown(f"## 현재 질문: {active_q.get('질문', '')}")
             
-            # 응답자 수 표시
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(
-                    f'<div class="metric-card"><h3>응답자 수</h3><h2>{unique_respondents}</h2></div>',
-                    unsafe_allow_html=True
-                )
-            with col2:
-                st.markdown(
-                    f'<div class="metric-card"><h3>총 응답 수</h3><h2>{len(current_responses)}</h2></div>',
-                    unsafe_allow_html=True
-                )
+            # 응답자 수 표시 (더 작고 간결하게)
+            st.markdown(
+                f'<div class="stats-container">'
+                f'<div class="stat-item"><h3>응답자 수</h3><h2>{unique_respondents}</h2></div>'
+                f'<div class="stat-item"><h3>총 응답 수</h3><h2>{len(current_responses)}</h2></div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
             
             # 결과 차트
             st.markdown("### 응답 결과")
@@ -462,18 +502,28 @@ def main():
                 with st.expander("원시 응답 데이터"):
                     # 응답 데이터를 테이블로 표시
                     filtered_responses = [r for r in responses if r.get("질문ID") == active_q_id]
+                    
+                    # 한글 표시를 위한 데이터프레임 설정
                     df = pd.DataFrame(filtered_responses)
-                    st.dataframe(df)
+                    
+                    # 한글 인코딩 문제 해결을 위한 설정
+                    st.dataframe(
+                        df,
+                        column_config={
+                            "시간": st.column_config.TextColumn("시간"),
+                            "학번": st.column_config.TextColumn("학번"),
+                            "이름": st.column_config.TextColumn("이름", width="medium"),
+                            "질문ID": st.column_config.TextColumn("질문ID"),
+                            "응답": st.column_config.TextColumn("응답", width="large"),
+                            "세션ID": st.column_config.TextColumn("세션ID", width="small")
+                        },
+                        use_container_width=True
+                    )
             else:
                 st.info("아직 이 질문에 대한 응답이 없습니다.")
         
         else:
             st.warning("현재 활성화된 질문이 없습니다. 사이드바에서 질문을 활성화해주세요.")
-    
-    # 자동 새로고침
-    if auto_refresh:
-        time.sleep(refresh_interval)
-        st.rerun()  # 페이지 새로고침
 
 if __name__ == "__main__":
     main()
