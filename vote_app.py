@@ -79,8 +79,13 @@ def main():
                 return
                 
             sheet = client.open_by_key(sheet_id)
-            worksheet_count = sheet.worksheet_count
-            st.success(f"연결 성공! 시트 수: {worksheet_count}")
+            
+            # 워크시트 목록 가져오기 (worksheet_count 대신 worksheets() 메서드 사용)
+            worksheets = sheet.worksheets()
+            worksheet_names = [ws.title for ws in worksheets]
+            
+            st.success(f"연결 성공! 시트 수: {len(worksheets)}")
+            st.write(f"워크시트 목록: {', '.join(worksheet_names)}")
             
             # 서비스 계정 정보 확인
             service_account_email = st.secrets["gcp_service_account"]["client_email"]
