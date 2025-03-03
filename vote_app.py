@@ -44,16 +44,20 @@ st.markdown(
 # 구글 시트 연결 설정
 @st.cache_resource
 def get_gsheet_connection():
-    scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
+    try:
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
 
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gcp_service_account"], scope
-    )
-    client = gspread.authorize(credentials)
-    return client
+        credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+            st.secrets["gcp_service_account"], scope
+        )
+        client = gspread.authorize(credentials)
+        return client
+    except Exception as e:
+        st.error(f"인증 오류: {str(e)}")
+        return None
 
 # 세션 ID 생성 (사용자 추적용)
 if "session_id" not in st.session_state:
@@ -63,16 +67,24 @@ if "session_id" not in st.session_state:
 def main():
     st.markdown('<div class="title">실시간 참여</div>', unsafe_allow_html=True)
     
-    # 구글 시트 ID
-    sheet_id = "1DeLOnDJ4KdtZfKwEMAnYWqINTKx7vv22c3SQCu6lxQY"
+    # 구글 시트 ID (secrets에서 가져오기)
+    sheet_id = st.secrets.get("general", {}).get("sheet_id", "1DeLOnDJ4KdtZfKwEMAnYWqINTKx7vv22c3SQCu6lxQY")
     
     # 연결 테스트
     if st.button("구글 시트 연결 테스트"):
         try:
             client = get_gsheet_connection()
+            if not client:
+                st.error("구글 시트 연결에 실패했습니다.")
+                return
+                
             sheet = client.open_by_key(sheet_id)
             worksheet_count = sheet.worksheet_count
             st.success(f"연결 성공! 시트 수: {worksheet_count}")
+            
+            # 서비스 계정 정보 확인
+            service_account_email = st.secrets["gcp_service_account"]["client_email"]
+            st.info(f"사용 중인 서비스 계정: {service_account_email}")
         except Exception as e:
             st.error(f"연결 실패: {str(e)}")
     
