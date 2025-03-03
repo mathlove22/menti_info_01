@@ -9,7 +9,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import re
-import datetime
 
 # 페이지 설정
 st.set_page_config(
@@ -84,13 +83,15 @@ def load_questions(sheet_id):
             return []
             
         sheet = client.open_by_key(sheet_id)
-        try:
-            worksheet = sheet.worksheet("질문")
-            data = worksheet.get_all_records()
-            return data
-        except Exception as e:
-            st.error(f"질문 워크시트 접근 오류: {str(e)}")
-            return []
+        worksheets = sheet.worksheets()
+        
+        for ws in worksheets:
+            if ws.title == "질문":
+                data = ws.get_all_records()
+                return data
+        
+        # 질문 워크시트가 없는 경우
+        return []
     except Exception as e:
         st.error(f"질문 데이터 로드 오류: {str(e)}")
         return []
@@ -104,13 +105,15 @@ def load_responses(sheet_id):
             return []
             
         sheet = client.open_by_key(sheet_id)
-        try:
-            worksheet = sheet.worksheet("응답")
-            data = worksheet.get_all_records()
-            return data
-        except Exception as e:
-            st.error(f"응답 워크시트 접근 오류: {str(e)}")
-            return []
+        worksheets = sheet.worksheets()
+        
+        for ws in worksheets:
+            if ws.title == "응답":
+                data = ws.get_all_records()
+                return data
+        
+        # 응답 워크시트가 없는 경우
+        return []
     except Exception as e:
         st.error(f"응답 데이터 로드 오류: {str(e)}")
         return []
@@ -123,7 +126,16 @@ def update_question_status(sheet_id, question_id, active_status):
             return False
             
         sheet = client.open_by_key(sheet_id)
-        worksheet = sheet.worksheet("질문")
+        worksheet = None
+        
+        for ws in sheet.worksheets():
+            if ws.title == "질문":
+                worksheet = ws
+                break
+        
+        if not worksheet:
+            st.error("질문 워크시트를 찾을 수 없습니다.")
+            return False
         
         # 모든 질문 비활성화
         if active_status:
@@ -146,7 +158,7 @@ def update_question_status(sheet_id, question_id, active_status):
                     worksheet.update_cell(cell.row, active_col, "Y" if active_status else "N")
                     return True
             
-            st.error(f"질문 ID '{question_id}'를 찾을 수 없습니다.")
+            st.warning(f"질문 ID '{question_id}'를 찾을 수 없습니다.")
             return False
         except Exception as e:
             st.error(f"질문 상태 업데이트 중 오류: {str(e)}")
@@ -179,13 +191,13 @@ def generate_qr_code(url):
 # 텍스트 분석 함수 (단답형 응답용)
 def analyze_text_responses(responses, max_items=10):
     if not responses:
-        return None
+        return None, None
     
     # 단어 분리 및 빈도 계산
     words = []
     for response in responses:
         # 문장을 단어로 분리 (한글, 영문, 숫자 포함)
-        text_words = re.findall(r'\b[\w가-힣]+\b', response.lower())
+        text_words = re.findall(r'\b[\w가-힣]+\b', str(response).lower())
         words.extend(text_words)
     
     # 불용어 제거 (필요시 확장)
@@ -201,7 +213,7 @@ def analyze_text_responses(responses, max_items=10):
     top_words = word_counts.most_common(max_items)
     
     if not top_words:
-        return None
+        return None, None
     
     # 시각화용 데이터 준비
     labels = [word for word, _ in top_words]
@@ -241,10 +253,8 @@ def create_chart(data, question_type):
             
         elif question_type.lower() == "단답형":
             # 단답형 응답 분석 및 시각화
-            result = analyze_text_responses(data)
-            if result:
-                labels, values = result
-                
+            labels, values = analyze_text_responses(data)
+            if labels and values:
                 # 한글 폰트 설정
                 plt.rc('font', family='DejaVu Sans')
                 
@@ -271,6 +281,60 @@ def create_chart(data, question_type):
         st.error(f"차트 생성 중 오류: {str(e)}")
         return None
 
+# 시트 초기화 함수
+def initialize_sheets(sheet_id):
+    try:
+        client = get_gsheet_connection()
+        if not client:
+            st.error("구글 시트 연결에 실패했습니다.")
+            return False
+            
+        sheet = client.open_by_key(sheet_id)
+        
+        # 시트1 초기화 (질문)
+        worksheet = None
+        for ws in sheet.worksheets():
+            if ws.title == "질문":
+                worksheet = ws
+                break
+        
+        if not worksheet:
+            worksheet = sheet.add_worksheet(title="질문", rows=1, cols=10)
+        
+        worksheet.clear()
+        
+        # 헤더 설정
+        headers = ["질문ID", "질문", "유형", "선택지1", "선택지2", "선택지3", "선택지4", "선택지5", "정답", "활성화"]
+        worksheet.append_row(headers)
+        
+        # 샘플 질문 추가
+        sample_questions = [
+            ["Q1", "가장 좋아하는 프로그래밍 언어는?", "객관식", "Python", "JavaScript", "Java", "C++", "기타", "", "N"],
+            ["Q2", "이 수업에서 가장 흥미로웠던 부분은?", "단답형", "", "", "", "", "", "", "N"]
+        ]
+        
+        for q in sample_questions:
+            worksheet.append_row(q)
+        
+        # 시트2 초기화 (응답)
+        response_ws = None
+        for ws in sheet.worksheets():
+            if ws.title == "응답":
+                response_ws = ws
+                break
+        
+        if not response_ws:
+            response_ws = sheet.add_worksheet(title="응답", rows=1, cols=6)
+        
+        response_ws.clear()
+        response_headers = ["시간", "학번", "이름", "질문ID", "응답", "세션ID"]
+        response_ws.append_row(response_headers)
+        
+        return True
+    except Exception as e:
+        st.error(f"시트 초기화 중 오류 발생: {str(e)}")
+        return False
+
 # 메인 앱
 def main():
     st.markdown('<div class="title">실시간 투표 관리자 대시보드</div>', unsafe_allow_html=True)
@@ -283,8 +347,9 @@ def main():
     vote_app_url = "https://your-vote-app-url.streamlit.app"  
     
     # 자동 새로고침 설정
-    auto_refresh = st.sidebar.checkbox("자동 새로고침", value=True)
-    refresh_interval = st.sidebar.slider("새로고침 간격(초)", min_value=3, max_value=60, value=10)
+    auto_refresh = st.sidebar.checkbox("자동 새로고침", value=False)
+    if auto_refresh:
+        refresh_interval = st.sidebar.slider("새로고침 간격(초)", min_value=3, max_value=60, value=10)
     
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
@@ -309,49 +374,12 @@ def main():
             
             # 시트 초기화 버튼
             if st.button("시트 초기화 (샘플 질문 추가)", use_container_width=True):
-                try:
-                    client = get_gsheet_connection()
-                    if not client:
-                        st.error("구글 시트 연결에 실패했습니다.")
-                        return
-                        
-                    sheet = client.open_by_key(sheet_id)
-                    
-                    # 시트1 초기화 (질문)
-                    try:
-                        worksheet = sheet.worksheet("질문")
-                    except:
-                        worksheet = sheet.add_worksheet(title="질문", rows=1, cols=10)
-                    
-                    worksheet.clear()
-                    
-                    # 헤더 설정
-                    headers = ["질문ID", "질문", "유형", "선택지1", "선택지2", "선택지3", "선택지4", "선택지5", "정답", "활성화"]
-                    worksheet.append_row(headers)
-                    
-                    # 샘플 질문 추가
-                    sample_questions = [
-                        ["Q1", "가장 좋아하는 프로그래밍 언어는?", "객관식", "Python", "JavaScript", "Java", "C++", "기타", "", "N"],
-                        ["Q2", "이 수업에서 가장 흥미로웠던 부분은?", "단답형", "", "", "", "", "", "", "N"]
-                    ]
-                    
-                    for q in sample_questions:
-                        worksheet.append_row(q)
-                    
-                    # 시트2 초기화 (응답)
-                    try:
-                        response_ws = sheet.worksheet("응답")
-                    except:
-                        response_ws = sheet.add_worksheet(title="응답", rows=1, cols=6)
-                    
-                    response_ws.clear()
-                    response_headers = ["시간", "학번", "이름", "질문ID", "응답", "세션ID"]
-                    response_ws.append_row(response_headers)
-                    
+                if initialize_sheets(sheet_id):
                     st.success("시트가 초기화되었습니다. 샘플 질문이 추가되었습니다.")
-                    st.experimental_rerun()
-                except Exception as e:
-                    st.error(f"시트 초기화 중 오류 발생: {str(e)}")
+                    st.cache_data.clear()  # 캐시 지우기
+                    st.cache_resource.clear()  # 캐시 지우기
+                    time.sleep(1)
+                    st.rerun()  # 페이지 새로고침
         else:
             # 질문 선택 및 활성화
             question_options = {q.get("질문ID", f"질문_{i}"): q.get("질문", f"질문_{i}") 
@@ -372,7 +400,9 @@ def main():
             if st.button("이 질문 활성화", use_container_width=True):
                 if update_question_status(sheet_id, selected_question, True):
                     st.success(f"질문 '{question_options[selected_question]}'이(가) 활성화되었습니다.")
-                    st.experimental_rerun()
+                    st.cache_data.clear()  # 캐시 지우기
+                    time.sleep(1)
+                    st.rerun()  # 페이지 새로고침
             
             if st.button("모든 질문 비활성화", use_container_width=True):
                 success = True
@@ -382,7 +412,9 @@ def main():
                             success = False
                 if success:
                     st.success("모든 질문이 비활성화되었습니다.")
-                    st.experimental_rerun()
+                    st.cache_data.clear()  # 캐시 지우기
+                    time.sleep(1)
+                    st.rerun()  # 페이지 새로고침
     
     # 메인 컨텐츠: 결과 대시보드
     responses = load_responses(sheet_id)
@@ -441,7 +473,7 @@ def main():
     # 자동 새로고침
     if auto_refresh:
         time.sleep(refresh_interval)
-        st.experimental_rerun()
+        st.rerun()  # 페이지 새로고침
 
 if __name__ == "__main__":
     main()
