@@ -30,7 +30,7 @@ def set_korean_font():
     if not os.path.exists(font_path):
         try:
             # 나눔고딕 폰트 다운로드
-            font_url = 'https://raw.githubusercontent.com/naver/nanumfont/master/NanumFont_TTF_ALL/NanumGothic.ttf'
+            font_url = 'https://fonts.gstatic.com/s/nanumgothic/v21/PN_3Rfi-oW3hYwmKDpxS7F_z_tLfxno73g.ttf'
             urllib.request.urlretrieve(font_url, font_path)
             st.success("한글 폰트가 성공적으로 다운로드되었습니다.")
         except Exception as e:
