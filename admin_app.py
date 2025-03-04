@@ -495,9 +495,7 @@ def main():
     # 투표 앱 URL 가져오기
     vote_app_url = get_vote_app_url()
     
-    # 디버깅 정보 표시 (선택사항)
-    st.sidebar.info(f"현재 앱 URL: {vote_app_url}")
-    
+       
     # QR 코드 크기 상태 관리
     if "qr_large" not in st.session_state:
         st.session_state.qr_large = False
