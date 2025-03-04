@@ -527,7 +527,6 @@ def main():
                 f'<div class="qr-container">'
                 f'<img src="data:image/png;base64,{qr_img}" class="{qr_class}">'
                 f'<p>QR 코드를 스캔하여 참여하세요</p>'
-                f'<p><small>URL: {vote_app_url}</small></p>'
                 f'</div>',
                 unsafe_allow_html=True
             )
