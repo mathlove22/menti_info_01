@@ -502,7 +502,6 @@ def main():
     
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
-        st.markdown("### 투표 앱 URL 설정")
         new_url = st.text_input(
             "투표 앱 URL:",
             value=get_vote_app_url(),
