@@ -22,9 +22,11 @@ st.set_page_config(
 
 # 앱 URL 관련 함수
 def get_vote_app_url():
-    """투표 앱의 URL을 반환"""
-    # 투표 앱 URL 하드코딩
-    return "https://mentiinfo01-vote.streamlit.app"
+    """투표 앱의 URL을 세션 상태에서 가져오거나 기본값 사용"""
+    if "vote_app_url" not in st.session_state:
+        # 기본 URL (가장 최근에 알려진 URL)
+        st.session_state.vote_app_url = "https://mentiinfo01-vote.streamlit.app"
+    return st.session_state.vote_app_url
 
 
 # 한글 폰트 설정 함수
@@ -502,6 +504,21 @@ def main():
     
     # 사이드바: QR 코드 및 관리 옵션
     with st.sidebar:
+        st.markdown("### 투표 앱 URL 설정")
+        new_url = st.text_input(
+            "투표 앱 URL:",
+            value=get_vote_app_url(),
+            help="URL이 변경된 경우 여기에 새 URL을 입력하세요"
+        )
+        
+        if new_url != get_vote_app_url():
+            if st.button("URL 업데이트"):
+                st.session_state.vote_app_url = new_url
+                st.success(f"투표 앱 URL이 업데이트되었습니다: {new_url}")
+                st.rerun()
+        
+        # 투표 앱 URL 표시
+        vote_app_url = get_vote_app_url()
         st.markdown("### 투표 참여 QR 코드")
         qr_img = generate_qr_code(vote_app_url)
         if qr_img:
