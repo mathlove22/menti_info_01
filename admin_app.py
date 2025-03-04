@@ -20,15 +20,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# 추가: 현재 앱 URL 가져오기 함수
+# 현재 앱 URL 가져오기 함수 (수정)
 def get_current_app_url():
     """현재 Streamlit 앱의 URL을 동적으로 가져옴"""
     # Streamlit Cloud 환경인 경우
-    if 'mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr' in os.environ:
-        return f"https://{os.environ['mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr']}.streamlit.app"
+    if 'HOSTNAME' in os.environ:
+        # HOSTNAME 환경 변수의 값을 가져옴
+        hostname = os.environ['HOSTNAME']
+        return f"https://{hostname}.streamlit.app"
     
-    # 로컬 환경이거나 URL이 secrets에 저장된 경우
-    return st.secrets.get("general", {}).get("app_url", "http://localhost:8501")
+    # 수동으로 설정한 URL 반환 (로컬 환경이거나 HOSTNAME이 없는 경우)
+    return "https://mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr.streamlit.app"
+
 
 # 한글 폰트 설정 함수
 def set_korean_font():
