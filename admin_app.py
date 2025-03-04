@@ -5,14 +5,13 @@ import time
 import qrcode
 from io import BytesIO
 import base64
-import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import re
-import numpy as np
 import os
 import urllib.request
 import matplotlib.font_manager as fm
+import math
 
 # 페이지 설정
 st.set_page_config(
@@ -372,14 +371,14 @@ def create_fancy_chart(data, question_type):
                 
                 # 수평 막대 그래프로 표시 (빈도 높은 순)
                 # 역순으로 정렬하여 가장 빈도가 높은 항목이 위에 오도록
-                labels = labels[::-1]
+                labels = labels[::-1]  # numpy 없이도 리스트 역순 가능
                 values = values[::-1]
                 
-                # 화려한 그라데이션 색상 생성
+                # 화려한 그라데이션 색상 생성 (numpy 대신 math 사용)
                 color_gradient = []
                 for i in range(len(labels)):
                     r = 0.1 + 0.6 * (i / len(labels))
-                    g = 0.3 + 0.4 * np.sin(i / len(labels) * np.pi)
+                    g = 0.3 + 0.4 * math.sin(i / len(labels) * math.pi)  # math.sin 사용
                     b = 0.8 - 0.6 * (i / len(labels))
                     color_gradient.append((r, g, b))
                 
@@ -609,22 +608,8 @@ def main():
                     # 응답 데이터를 테이블로 표시
                     filtered_responses = [r for r in responses if r.get("질문ID") == active_q_id]
                     
-                    # 한글 표시를 위한 데이터프레임 설정
-                    df = pd.DataFrame(filtered_responses)
-                    
-                    # 한글 인코딩 문제 해결을 위한 설정
-                    st.dataframe(
-                        df,
-                        column_config={
-                            "시간": st.column_config.TextColumn("시간"),
-                            "학번": st.column_config.TextColumn("학번"),
-                            "이름": st.column_config.TextColumn("이름", width="medium"),
-                            "질문ID": st.column_config.TextColumn("질문ID"),
-                            "응답": st.column_config.TextColumn("응답", width="large"),
-                            "세션ID": st.column_config.TextColumn("세션ID", width="small")
-                        },
-                        use_container_width=True
-                    )
+                    # pandas 대신 직접 테이블 생성
+                    st.table(filtered_responses)
             else:
                 st.info("아직 이 질문에 대한 응답이 없습니다.")
         
