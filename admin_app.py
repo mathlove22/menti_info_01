@@ -20,6 +20,16 @@ st.set_page_config(
     layout="wide"
 )
 
+# 추가: 현재 앱 URL 가져오기 함수
+def get_current_app_url():
+    """현재 Streamlit 앱의 URL을 동적으로 가져옴"""
+    # Streamlit Cloud 환경인 경우
+    if 'mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr' in os.environ:
+        return f"https://{os.environ['mentiinfo01-9p3y4fmsrwzuwmzgtsrwzr']}.streamlit.app"
+    
+    # 로컬 환경이거나 URL이 secrets에 저장된 경우
+    return st.secrets.get("general", {}).get("app_url", "http://localhost:8501")
+
 # 한글 폰트 설정 함수
 def set_korean_font():
     # 폰트 파일 다운로드 및 등록 (Streamlit Cloud에서 실행 시)
@@ -483,9 +493,11 @@ def main():
     # 구글 시트 ID (secrets에서 가져오기)
     sheet_id = st.secrets.get("general", {}).get("sheet_id", "1DeLOnDJ4KdtZfKwEMAnYWqINTKx7vv22c3SQCu6lxQY")
     
-    # 투표 앱 URL - 배포 후 실제 URL로 변경 필요
-    # 예시: https://mentiinfo01-vote-jqg6tgae4s6aorcxpvvxmq.streamlit.app/
-    vote_app_url = "https://your-vote-app-url.streamlit.app"  
+    # 추가: 동적으로 현재 앱 URL 가져오기
+    vote_app_url = get_current_app_url()
+    
+    # 디버깅 정보 표시 (선택사항)
+    st.sidebar.info(f"현재 앱 URL: {vote_app_url}")
     
     # QR 코드 크기 상태 관리
     if "qr_large" not in st.session_state:
@@ -504,6 +516,7 @@ def main():
                 f'<div class="qr-container">'
                 f'<img src="data:image/png;base64,{qr_img}" class="{qr_class}">'
                 f'<p>QR 코드를 스캔하여 참여하세요</p>'
+                f'<p><small>URL: {vote_app_url}</small></p>'
                 f'</div>',
                 unsafe_allow_html=True
             )
