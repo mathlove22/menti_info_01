@@ -468,10 +468,22 @@ def main():
                 st.session_state.last_check_time = current_time
                 st.rerun()  # 5초마다 조용히 새로고침
             
-        # 새 닉네임으로 참여 버튼
+        # 새 닉네임으로 참여하기 버튼 코드 수정
         if st.button("새 닉네임으로 참여하기", use_container_width=True):
-            # 응답 기록은 유지하고 닉네임만 변경
+            # 1. 응답 기록 초기화 - 응답 관련 세션 변수만 삭제
+            for key in list(st.session_state.keys()):
+                if key.startswith("answered_") or key == "selected_option":
+                    del st.session_state[key]
+    
+            # 2. 새 세션 ID 생성
+            st.session_state.session_id = str(uuid.uuid4())
+    
+            # 3. 새 닉네임 생성
             st.session_state.nickname = generate_random_nickname()
+    
+            # 4. 성공 메시지 표시 후 페이지 새로고침
+            st.success("새 닉네임으로 참여합니다!")
+            time.sleep(1)
             st.rerun()
             
     except Exception as e:
